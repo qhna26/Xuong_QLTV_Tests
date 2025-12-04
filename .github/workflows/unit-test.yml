@@ -1,0 +1,73 @@
+name: CI/CD - Unit Tests Only
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore test project
+        run: dotnet restore QLTV.Tests/QLTV.Tests.csproj
+
+      - name: Build test project
+        run: dotnet build QLTV.Tests/QLTV.Tests.csproj --no-restore --configuration Release
+
+      # QUAN TRỌNG: dùng cú pháp Windows + tạo thư mục trước
+      - name: Run Unit Tests + Generate TRX & Coverage
+        run: |
+          mkdir TestResults -Force
+          dotnet test QLTV.Tests/QLTV.Tests.csproj `
+            --no-build `
+            --configuration Release `
+            --collect:"XPlat Code Coverage" `
+            --logger "trx;LogFileName=QLTV.Tests.trx" `
+            --results-directory "TestResults"
+
+      # Upload TRX
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/**/*.trx
+
+      # Báo cáo test bằng dorny (bắt buộc có cái này mới xanh)
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Test Results
+          path: TestResults/**/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false   # để pipeline không đỏ khi test fail
+
+      # Coverage report (sửa lỗi Cobertura và đường dẫn)
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate Coverage Report
+        if: always()
+        run: |
+          reportgenerator `
+            -reports:"TestResults/**/coverage.cobertura.xml" `
+            -targetdir:"coveragereport" `
+            -reporttypes:HtmlInline_AzurePipelines
+
+      - name: Upload Coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coveragereport
