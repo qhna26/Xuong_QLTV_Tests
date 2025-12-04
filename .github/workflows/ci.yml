@@ -1,0 +1,52 @@
+name: CI/CD - Build & Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies (with cache - chạy nhanh hơn)
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore NuGet packages
+      run: dotnet restore
+
+    - name: Build solution
+      run: dotnet build Xuong_QLTV.sln --configuration Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test QLTV.Tests/QLTV.Tests.csproj --configuration Release --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: '**/*.trx'
+
+    - name: Test Report (điểm cộng đẹp)
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Test Results
+        path: '**/*.trx'
+        reporter: dotnet-
