@@ -18,16 +18,17 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # Chỉ restore + build project test → tránh lỗi cancel
       - name: Restore test project
         run: dotnet restore QLTV.Tests/QLTV.Tests.csproj
 
       - name: Build test project
         run: dotnet build QLTV.Tests/QLTV.Tests.csproj --no-restore --configuration Release
 
-      # QUAN TRỌNG: dùng cú pháp Windows + tạo thư mục trước
-      - name: Run Unit Tests + Generate TRX & Coverage
+      # Tạo thư mục + chạy test (chắc chắn tạo được file TRX + coverage)
+      - name: Run Unit Tests
         run: |
-          mkdir TestResults -Force
+          New-Item -ItemType Directory -Force -Path TestResults
           dotnet test QLTV.Tests/QLTV.Tests.csproj `
             --no-build `
             --configuration Release `
@@ -35,7 +36,6 @@ jobs:
             --logger "trx;LogFileName=QLTV.Tests.trx" `
             --results-directory "TestResults"
 
-      # Upload TRX
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,7 +43,6 @@ jobs:
           name: test-results
           path: TestResults/**/*.trx
 
-      # Báo cáo test bằng dorny (bắt buộc có cái này mới xanh)
       - name: Publish Test Report
         uses: dorny/test-reporter@v1
         if: always()
@@ -51,11 +50,11 @@ jobs:
           name: Unit Test Results
           path: TestResults/**/*.trx
           reporter: dotnet-trx
-          fail-on-error: false   # để pipeline không đỏ khi test fail
+          fail-on-error: false
 
-      # Coverage report (sửa lỗi Cobertura và đường dẫn)
+      # Coverage: chỉ dùng 1 loại report để tránh lỗi Cobertura
       - name: Install ReportGenerator
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.3.0
 
       - name: Generate Coverage Report
         if: always()
@@ -65,9 +64,22 @@ jobs:
             -targetdir:"coveragereport" `
             -reporttypes:HtmlInline_AzurePipelines
 
-      - name: Upload Coverage HTML
+      # Chỉ upload khi thư mục tồn tại
+      - name: Upload Coverage Report
+        if: always()
+        run: |
+          if (Test-Path "coveragereport") {
+            echo "Coverage report generated successfully"
+          } else {
+            echo "No coverage file found, skipping upload"
+            exit 0
+          }
+        shell: pwsh
+
+      - name: Upload Coverage HTML Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coveragereport
+          path: coveragereport/
+          if-no-files-found: ignore   # quan trọng: không báo warning nữa
