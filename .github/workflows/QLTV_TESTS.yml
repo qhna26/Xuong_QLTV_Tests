@@ -1,0 +1,33 @@
+name: Quản Lý Thư Viện - Tự động Build & Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest # Đã sửa thành Windows, Rất tốt!
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cài đặt .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          # Đảm bảo bạn đang sử dụng 8.0.x vì .NET 9.0 là Pre-release
+          dotnet-version: 8.0.x    
+
+      - name: Restore packages
+        # SỬA: CHỈ CẦN CHẠY TRONG THƯ MỤC GỐC
+        run: dotnet restore 
+
+      - name: Build dự án
+        # SỬA: CHỈ CẦN CHẠY TRONG THƯ MỤC GỐC
+        run: dotnet build --no-restore -c Release
+
+      - name: Chạy toàn bộ Unit Test
+        # SỬA: CHỈ CẦN CHẠY TRONG THƯ MỤC GỐC
+        run: dotnet test --no-build -c Release --no-restore --verbosity normal
